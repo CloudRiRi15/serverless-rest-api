@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  riri-weather-rest-api
+
+  Sample SAM Template for riri-weather-rest-api
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Runtime: python3.10
+    Timeout: 3
+    MemorySize: 128
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref WeatherTable
+
+Resources:
+  WeatherApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      Description: serverless api for weather application  
+
+  CreateWeather:
+    Type: AWS::Serverless::Function
+    Description: 'Lambda function inserts weather data into DynamoDB table'
+    Properties:
+      FunctionName: CreateWeatherLambda
+      Handler: create_weather.lambda_handler
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /create-weather
+            Method: POST
+            RestApiId: !Ref WeatherApi
+    Connectors:
+      addWeatherItemToDB:
+        Properties:
+          Destination:
+            Id: WeatherTable
+          Permissions:
+            - Write      
+  UpdateWeather:
+    Type: AWS::Serverless::Function
+    Description: 'Lambda function updates weather item in DynamoDB table'
+    Properties:
+      FunctionName: UpdateWeatherLambda
+      Handler: update_weather.lambda_handler
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /weather/{id}
+            Method: PUT
+            RestApiId: !Ref WeatherApi
+    Connectors:
+      updateWeatherItemToDB:
+        Properties:
+          Destination:
+            Id: WeatherTable
+          Permissions:
+            - Write  
+
+  GetWeather:
+    Type: AWS::Serverless::Function
+    Description: 'Lambda function gets weather item in DynamoDB table'
+    Properties:
+      FunctionName: GetWeatherLambda
+      Handler: get_weather.lambda_handler
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /weather/{id}
+            Method: GET
+            RestApiId: !Ref WeatherApi
+    Connectors:
+      getWeatherItemToDB:
+        Properties:
+          Destination:
+            Id: WeatherTable
+          Permissions:
+            - Read
+
+  DeleteWeather:
+    Type: AWS::Serverless::Function
+    Description: 'Lambda function deletes weather item from DynamoDB table'
+    Properties:
+      FunctionName: DeleteWeatherLambda
+      Handler: delete_weather.lambda_handler
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /weather/{id}
+            Method: DELETE
+            RestApiId: !Ref WeatherApi
+    Connectors:
+      deleteWeatherItemToDB:
+        Properties:
+          Destination:
+            Id: WeatherTable
+          Permissions:
+            - Write          
+
+  GetAllWeather:
+    Type: AWS::Serverless::Function
+    Description: 'Lambda function gets all weather item in DynamoDB table'
+    Properties:
+      FunctionName: GetsAllWeatherLambda
+      Handler: get_weathers.lambda_handler
+
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /weathers
+            Method: GET
+            RestApiId: !Ref WeatherApi
+    Connectors:
+      getsWeatherItemToDB:
+        Properties:
+          Destination:
+            Id: WeatherTable
+          Permissions:
+            - Read                   
+
+  WeatherTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  HelloWorldApi:
+    Description: API Gateway endpoint URL for Prod stage for Hello World function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+  HelloWorldFunction:
+    Description: Hello World Lambda Function ARN
+    Value: !GetAtt HelloWorldFunction.Arn
+  HelloWorldFunctionIamRole:
+    Description: Implicit IAM Role created for Hello World function
+    Value: !GetAtt HelloWorldFunctionRole.Arn
